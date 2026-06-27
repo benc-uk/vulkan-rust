@@ -18,5 +18,5 @@ In this repository the code for this app is in the [triangle/ folder](./triangle
 
 Links to the tutorial steps as incremental branches:
 
-- [00-setup](./tree/00-setup) - Initial setup of the project, including dependencies and basic window creation.
-- [01-instance](./tree/01-instance) - Creating a Vulkan instance and setting up the application info.
+- [00-setup](../tree/00-setup) - Initial setup of the project, including dependencies and basic window creation.
+- [01-instance](../tree/01-instance) - Creating a Vulkan instance and setting up the application info.
