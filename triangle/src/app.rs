@@ -1,5 +1,6 @@
 use ash_window::enumerate_required_extensions;
 use raw_window_handle::HasDisplayHandle;
+use std::ffi::CStr;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -61,14 +62,26 @@ impl ApplicationHandler for VulkanApp {
         let display_handle = event_loop.display_handle().unwrap().as_raw();
         let extensions = enumerate_required_extensions(display_handle).unwrap();
         for &ext in extensions {
-          let name = std::ffi::CStr::from_ptr(ext);
+          let name = CStr::from_ptr(ext);
           println!("  required extension: {}", name.to_string_lossy());
         }
 
-        // Step 3: Instance creation info, is bundle of application info and extensions
-        let create_info = InstanceCreateInfo::default().application_info(&appinfo).enabled_extension_names(extensions);
+        // Step 3: Add validation layers if in debug mode, to help catch mistakes in Vulkan usage
+        #[cfg(debug_assertions)]
+        // Needs the Vulkan SDK installed or `vulkan-validationlayers` package on Linux
+        let validation_layers = [c"VK_LAYER_KHRONOS_validation"];
+        #[cfg(not(debug_assertions))]
+        let validation_layers = [];
 
-        // Step 4: Finally create the Vulkan instance
+        let enabled_layer_names: Vec<*const i8> = validation_layers.iter().map(|&s| s.as_ptr() as *const i8).collect();
+
+        // Step 4: Instance creation info, is bundle of application info and extensions
+        let create_info = InstanceCreateInfo::default()
+          .application_info(&appinfo)
+          .enabled_extension_names(extensions)
+          .enabled_layer_names(&enabled_layer_names);
+
+        // Step 5: Finally create the Vulkan instance
         self.entry.create_instance(&create_info, None).expect("Failed to create Vulkan instance")
       });
 
