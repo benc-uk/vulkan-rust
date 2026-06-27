@@ -7,7 +7,7 @@ fn main() {
   event_loop.set_control_flow(ControlFlow::Poll);
   event_loop.set_control_flow(ControlFlow::Wait);
 
-  let mut app = app::VulkanApp::new();
+  let mut app = app::VulkanApp::new("Vulkan App").unwrap();
 
   event_loop.run_app(&mut app).unwrap();
 }
