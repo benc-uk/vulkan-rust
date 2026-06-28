@@ -8,8 +8,7 @@ use winit::window::{Window, WindowId};
 
 use crate::vulkan;
 
-const WIDTH: u32 = 1024;
-const HEIGHT: u32 = 768;
+const SIZE: (u32, u32) = (1024, 768);
 
 pub struct VulkanApp {
   name: String,
@@ -39,8 +38,15 @@ impl ApplicationHandler for VulkanApp {
   // Despite the name this is called when the application is first created
   fn resumed(&mut self, event_loop: &ActiveEventLoop) {
     if self.window.is_none() {
-      let size = LogicalSize::new(WIDTH, HEIGHT);
-      let win = event_loop.create_window(Window::default_attributes().with_inner_size(size).with_title(&self.name)).unwrap();
+      let win = event_loop
+        .create_window(
+          Window::default_attributes()
+            .with_inner_size(LogicalSize::new(SIZE.0, SIZE.1))
+            .with_title(&self.name)
+            .with_decorations(true),
+        )
+        .unwrap();
+
       let disp_handle = win.display_handle().unwrap().as_raw();
       let win_handle = win.window_handle().unwrap().as_raw();
 
@@ -48,7 +54,9 @@ impl ApplicationHandler for VulkanApp {
 
       let (surface, surface_loader) = vulkan::get_surface(&entry, &instance, disp_handle, win_handle);
 
-      let (device, _phys_device, _qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
+      let (device, phys_device, _qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
+
+      vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
 
       self.entry = Some(entry);
       self.instance = Some(instance);
