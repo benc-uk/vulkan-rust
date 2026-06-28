@@ -75,3 +75,11 @@ Image views are the next step in setting up the presentation pipeline. This incl
 This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/02_Image_views.html
+
+## Step: 08 - Shader Modules
+
+Adds code to create shader modules from SPIR-V bytecode, and an introduction to Slang and building/compiling shaders. This is the first step in setting up the graphics pipeline.
+
+This tag equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/01_Shader_modules.html
