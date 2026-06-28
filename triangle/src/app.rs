@@ -1,4 +1,5 @@
 use raw_window_handle::HasDisplayHandle;
+use raw_window_handle::HasWindowHandle;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -40,21 +41,21 @@ impl ApplicationHandler for VulkanApp {
     if self.window.is_none() {
       let size = LogicalSize::new(WIDTH, HEIGHT);
       let win = event_loop.create_window(Window::default_attributes().with_inner_size(size).with_title(&self.name)).unwrap();
-      let display_handle = win.display_handle().unwrap().as_raw();
+      let disp_handle = win.display_handle().unwrap().as_raw();
+      let win_handle = win.window_handle().unwrap().as_raw();
 
-      let (entry, instance) = vulkan::init(display_handle, &self.name);
+      let (entry, instance) = vulkan::init(disp_handle, &self.name);
 
-      // Pick a physical device (GPU) from the available devices on the system
-      let physical_device = vulkan::get_physical_device(&instance, 0);
-      // Get a logical device with a graphics queue
-      let device = vulkan::get_device(&instance, physical_device, vec![ash::vk::QueueFlags::GRAPHICS]);
+      let (surface, surface_loader) = vulkan::get_surface(&entry, &instance, disp_handle, win_handle);
+
+      let (device, _phys_device, _qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
 
       self.entry = Some(entry);
       self.instance = Some(instance);
       self.window = Some(win);
       self.device = Some(device);
 
-      println!("Vulkan instance created. App is initialized: {}", self.is_initialized());
+      println!("App is initialized: {}", self.is_initialized());
     }
   }
 

@@ -1,6 +1,8 @@
-use ash::vk::{ApplicationInfo, InstanceCreateInfo, make_api_version};
-use ash_window::enumerate_required_extensions;
+use ash::khr::surface;
+use ash::vk::{ApplicationInfo, DeviceCreateInfo, DeviceQueueCreateInfo, InstanceCreateInfo, QueueFlags, make_api_version};
+use ash_window::{create_surface, enumerate_required_extensions};
 use raw_window_handle::RawDisplayHandle;
+use raw_window_handle::RawWindowHandle;
 use std::ffi::CStr;
 
 /// Initializes Vulkan with ash and returns the Vulkan entry and instance.
@@ -52,79 +54,69 @@ pub fn init(display_handle: RawDisplayHandle, app_name: &str) -> (ash::Entry, as
   }
 }
 
-/// Picks a physical device (GPU) from the available devices on the system.
-/// This function enumerates all physical devices and prints their properties,
-/// No smart selection is performed; it simply returns the device at the given index.
-pub fn get_physical_device(instance: &ash::Instance, index: usize) -> ash::vk::PhysicalDevice {
+/// Picks a physical device (GPU) that will support both graphics and given surface.
+/// Returns: logical  device, physical device handle, and queue family index
+pub fn get_device(instance: &ash::Instance, surface_loader: &surface::Instance, surface: ash::vk::SurfaceKHR) -> (ash::Device, ash::vk::PhysicalDevice, u32) {
   unsafe {
     let physical_devices = instance.enumerate_physical_devices().expect("Failed to enumerate physical devices");
     if physical_devices.is_empty() {
       panic!("No Vulkan-compatible physical devices found");
     }
 
-    // Enumerate and print information about each physical device, for diagnostic purposes only
-    for (i, device) in physical_devices.iter().enumerate() {
-      let properties = instance.get_physical_device_properties(*device);
-      let device_name = CStr::from_ptr(properties.device_name.as_ptr());
+    // Define the queue flags we want to support, it's only graphics for now, but could be extended to compute, transfer, etc.
+    let queue_flags = QueueFlags::GRAPHICS;
 
-      println!("Physical device {}: {}", i, device_name.to_string_lossy());
+    // Find a physical device that supports graphics and can present to the given surface
+    let (pdevice, qf_index) = physical_devices
+      .iter()
+      .find_map(|pdevice| {
+        instance.get_physical_device_queue_family_properties(*pdevice).iter().enumerate().find_map(|(index, info)| {
+          let supports_graphic_and_surface = info.queue_flags.contains(queue_flags) && surface_loader.get_physical_device_surface_support(*pdevice, index as u32, surface).unwrap();
+          if supports_graphic_and_surface { Some((*pdevice, index)) } else { None }
+        })
+      })
+      .expect("Couldn't find suitable device.");
 
-      // Pretty print the API version
-      let api_version = properties.api_version;
-      let major = ash::vk::api_version_major(api_version);
-      let minor = ash::vk::api_version_minor(api_version);
-      let patch = ash::vk::api_version_patch(api_version);
-      println!("  • Vulkan API version: {}.{}.{}", major, minor, patch);
+    // Print selected physical device properties
+    let device_name = instance.get_physical_device_properties(pdevice).device_name;
+    let api_version = instance.get_physical_device_properties(pdevice).api_version;
+    println!("Selected physical device: {:?}", CStr::from_ptr(device_name.as_ptr()));
+    println!(
+      "Vulkan API version: {}.{}.{}",
+      ash::vk::api_version_major(api_version),
+      ash::vk::api_version_minor(api_version),
+      ash::vk::api_version_patch(api_version)
+    );
 
-      // Print the queue family properties
-      let queue_families = instance.get_physical_device_queue_family_properties(*device);
-      for (j, q) in queue_families.iter().enumerate() {
-        println!("  • Queue family {}: flags = {:?}", j, q.queue_flags);
-      }
+    let qf_index = qf_index as u32;
+    let priorities = [1.0];
+    let queue_info = DeviceQueueCreateInfo::default().queue_family_index(qf_index).queue_priorities(&priorities);
+    let device_create_info = DeviceCreateInfo::default().queue_create_infos(std::slice::from_ref(&queue_info));
 
-      // We could also enumerate the device extensions here if we wanted to see what each device supports
-      // let extensions = instance.enumerate_device_extension_properties(*device).unwrap();
-    }
+    let device = instance.create_device(pdevice, &device_create_info, None).unwrap();
 
-    // Despite all of that we just pick the first physical device
-    physical_devices[index]
+    println!("Logical device created successfully.");
+
+    (device, pdevice, qf_index)
   }
 }
 
-/// Creates a logical device from the given physical device and instance.
-pub fn get_device(instance: &ash::Instance, physical_device: ash::vk::PhysicalDevice, queue_flags: Vec<ash::vk::QueueFlags>) -> ash::Device {
+/// Obtains a Vulkan surface (SurfaceKHR) for the given window and display handles, and returns the surface and a surface loader.
+pub fn get_surface(entry: &ash::Entry, instance: &ash::Instance, disp_handle: RawDisplayHandle, win_handle: RawWindowHandle) -> (ash::vk::SurfaceKHR, surface::Instance) {
   unsafe {
-    println!("Creating logical device...");
+    let surf = create_surface(entry, instance, disp_handle, win_handle, None).expect("Failed to create Vulkan surface");
+    let surface_loader = surface::Instance::new(entry, instance);
 
-    // Step 1: Find a queue family that supports graphics
-    let mut family_index: Option<u32> = None;
-
-    let queue_family_properties = instance.get_physical_device_queue_family_properties(physical_device);
-    for flag in &queue_flags {
-      let index = queue_family_properties
-        .iter()
-        .enumerate()
-        .find(|(_, q)| q.queue_flags.contains(*flag))
-        .map(|(index, _)| index)
-        .expect(&format!("Failed to find a queue family with flag {:?}", flag)) as u32;
-      println!("Found queue family index {} for flag {:?}", index, flag);
-      family_index = Some(index);
+    // Just display which type of surface was created for debugging purposes
+    match disp_handle {
+      RawDisplayHandle::Windows(_) => println!("Created Vulkan surface for Windows."),
+      RawDisplayHandle::Wayland(_) => println!("Created Vulkan surface for Wayland."),
+      RawDisplayHandle::Xlib(_) => println!("Created Vulkan surface for Xlib."),
+      RawDisplayHandle::Xcb(_) => println!("Created Vulkan surface for XCB."),
+      RawDisplayHandle::Android(_) => println!("Created Vulkan surface for Android."),
+      _ => println!("Created Vulkan surface for unknown display handle."),
     }
 
-    let family_index = family_index.expect("Failed to find a suitable queue family") as u32;
-
-    // Step 2: DeviceQueueCreateInfo needed to pick queue family and priority for the logical device
-    let queue_priority_list = [1.0f32];
-    let queue_create_info = ash::vk::DeviceQueueCreateInfo::default()
-      .queue_family_index(family_index)
-      .queue_priorities(&queue_priority_list);
-    let queue_create_infos = [queue_create_info];
-
-    // Step 3: Create the logical device with the queue create info
-    let device_create_info = ash::vk::DeviceCreateInfo::default().queue_create_infos(&queue_create_infos);
-    let device = instance.create_device(physical_device, &device_create_info, None).expect("Failed to create logical device");
-
-    println!("Logical device created successfully.");
-    device
+    (surf, surface_loader)
   }
 }
