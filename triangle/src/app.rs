@@ -15,6 +15,7 @@ pub struct VulkanApp {
   window: Option<Window>,
   instance: Option<ash::Instance>,
   entry: Option<ash::Entry>,
+  device: Option<ash::Device>,
 }
 
 impl VulkanApp {
@@ -24,11 +25,12 @@ impl VulkanApp {
       window: None,
       instance: None,
       entry: None,
+      device: None,
     })
   }
 
   pub fn is_initialized(&self) -> bool {
-    self.window.is_some() && self.instance.is_some() && self.entry.is_some()
+    self.window.is_some() && self.instance.is_some() && self.entry.is_some() && self.device.is_some()
   }
 }
 
@@ -42,11 +44,15 @@ impl ApplicationHandler for VulkanApp {
 
       let (entry, instance) = vulkan::init(display_handle, &self.name);
 
-      let _pd = vulkan::pick_physical_device(&instance);
+      // Pick a physical device (GPU) from the available devices on the system
+      let physical_device = vulkan::get_physical_device(&instance, 0);
+      // Get a logical device with a graphics queue
+      let device = vulkan::get_device(&instance, physical_device, vec![ash::vk::QueueFlags::GRAPHICS]);
 
       self.entry = Some(entry);
       self.instance = Some(instance);
       self.window = Some(win);
+      self.device = Some(device);
 
       println!("Vulkan instance created. App is initialized: {}", self.is_initialized());
     }

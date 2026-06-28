@@ -1,5 +1,7 @@
 # Ash, Winit, Vulkan - Triangle App
 
+# Setup
+
 ## Step: 00 - Setup
 
 This is little more than a basic Rust project with the ash and winit dependencies added. There's no Vulkan code yet, but the project is set up and ready to go.
@@ -36,3 +38,12 @@ This is the first step in selecting a GPU to use for rendering.
 This branch equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/03_Physical_devices_and_queue_families.html
+
+## Step: 04 - Logical Device
+
+Added code to create a logical device from the selected physical device, and to get a graphics queue from that logical device.
+This is the first step in setting up the rendering pipeline.
+
+This branch equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html

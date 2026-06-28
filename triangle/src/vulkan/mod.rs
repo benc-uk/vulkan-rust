@@ -54,15 +54,15 @@ pub fn init(display_handle: RawDisplayHandle, app_name: &str) -> (ash::Entry, as
 
 /// Picks a physical device (GPU) from the available devices on the system.
 /// This function enumerates all physical devices and prints their properties,
-/// Currently just returns the first device. In a real app, you would do something smarter
-pub fn pick_physical_device(instance: &ash::Instance) -> ash::vk::PhysicalDevice {
+/// No smart selection is performed; it simply returns the device at the given index.
+pub fn get_physical_device(instance: &ash::Instance, index: usize) -> ash::vk::PhysicalDevice {
   unsafe {
     let physical_devices = instance.enumerate_physical_devices().expect("Failed to enumerate physical devices");
     if physical_devices.is_empty() {
       panic!("No Vulkan-compatible physical devices found");
     }
 
-    // Enumerate and print information about each physical device
+    // Enumerate and print information about each physical device, for diagnostic purposes only
     for (i, device) in physical_devices.iter().enumerate() {
       let properties = instance.get_physical_device_properties(*device);
       let device_name = CStr::from_ptr(properties.device_name.as_ptr());
@@ -87,6 +87,44 @@ pub fn pick_physical_device(instance: &ash::Instance) -> ash::vk::PhysicalDevice
     }
 
     // Despite all of that we just pick the first physical device
-    physical_devices[0]
+    physical_devices[index]
+  }
+}
+
+/// Creates a logical device from the given physical device and instance.
+pub fn get_device(instance: &ash::Instance, physical_device: ash::vk::PhysicalDevice, queue_flags: Vec<ash::vk::QueueFlags>) -> ash::Device {
+  unsafe {
+    println!("Creating logical device...");
+
+    // Step 1: Find a queue family that supports graphics
+    let mut family_index: Option<u32> = None;
+
+    let queue_family_properties = instance.get_physical_device_queue_family_properties(physical_device);
+    for flag in &queue_flags {
+      let index = queue_family_properties
+        .iter()
+        .enumerate()
+        .find(|(_, q)| q.queue_flags.contains(*flag))
+        .map(|(index, _)| index)
+        .expect(&format!("Failed to find a queue family with flag {:?}", flag)) as u32;
+      println!("Found queue family index {} for flag {:?}", index, flag);
+      family_index = Some(index);
+    }
+
+    let family_index = family_index.expect("Failed to find a suitable queue family") as u32;
+
+    // Step 2: DeviceQueueCreateInfo needed to pick queue family and priority for the logical device
+    let queue_priority_list = [1.0f32];
+    let queue_create_info = ash::vk::DeviceQueueCreateInfo::default()
+      .queue_family_index(family_index)
+      .queue_priorities(&queue_priority_list);
+    let queue_create_infos = [queue_create_info];
+
+    // Step 3: Create the logical device with the queue create info
+    let device_create_info = ash::vk::DeviceCreateInfo::default().queue_create_infos(&queue_create_infos);
+    let device = instance.create_device(physical_device, &device_create_info, None).expect("Failed to create logical device");
+
+    println!("Logical device created successfully.");
+    device
   }
 }
