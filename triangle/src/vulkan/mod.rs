@@ -157,11 +157,7 @@ pub fn create_swapchain(
       .get_physical_device_surface_present_modes(phys_device, surface)
       .expect("Failed to get present modes");
 
-    for pmode in &present_modes {
-      println!("Supported present mode: {:?}", pmode);
-    }
-
-    // Pick MAILBOX mode if available, then FIFO which we assume is always available
+    // Pick MAILBOX mode if available, then FIFO which we can assume is always available
     let present_mode = present_modes
       .iter()
       .find(|&&mode| mode == ash::vk::PresentModeKHR::MAILBOX)
@@ -174,6 +170,7 @@ pub fn create_swapchain(
       u32::MAX => ash::vk::Extent2D { width: size.0, height: size.1 },
       _ => surface_cap.current_extent,
     };
+
     // Canonical way to determine the number of images
     let mut desired_img_count = surface_cap.min_image_count + 1;
     if surface_cap.max_image_count > 0 && desired_img_count > surface_cap.max_image_count {
@@ -199,6 +196,40 @@ pub fn create_swapchain(
     let swapchain = swapchain_loader.create_swapchain(&swapchain_create_info, None).unwrap();
     let images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
 
+    println!(
+      "Swapchain created with {} images, format: {:?}, extent: {:?}, present mode: {:?}",
+      images.len(),
+      surface_format.format,
+      extent,
+      present_mode
+    );
+
     (swapchain, swapchain_loader, images)
+  }
+}
+
+pub fn create_image_view(device: &ash::Device, image: ash::vk::Image) -> ash::vk::ImageView {
+  unsafe {
+    let format = vk::Format::B8G8R8A8_SRGB; // This should match the swapchain image format
+
+    let create_info = vk::ImageViewCreateInfo::default()
+      .image(image)
+      .view_type(vk::ImageViewType::TYPE_2D)
+      .format(format)
+      .components(vk::ComponentMapping {
+        r: vk::ComponentSwizzle::IDENTITY,
+        g: vk::ComponentSwizzle::IDENTITY,
+        b: vk::ComponentSwizzle::IDENTITY,
+        a: vk::ComponentSwizzle::IDENTITY,
+      })
+      .subresource_range(vk::ImageSubresourceRange {
+        aspect_mask: vk::ImageAspectFlags::COLOR,
+        base_mip_level: 0,
+        level_count: 1,
+        base_array_layer: 0,
+        layer_count: 1,
+      });
+
+    device.create_image_view(&create_info, None).expect("Failed to create image view")
   }
 }

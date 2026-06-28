@@ -56,7 +56,13 @@ impl ApplicationHandler for VulkanApp {
 
       let (device, phys_device, _qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
 
-      vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
+      let (_swapchain, _swapchain_loader, images) = vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
+
+      let mut image_views = vec![];
+      for image in &images {
+        let image_view = vulkan::create_image_view(&device, *image);
+        image_views.push(image_view);
+      }
 
       self.entry = Some(entry);
       self.instance = Some(instance);
