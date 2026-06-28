@@ -29,4 +29,4 @@ Links to the tutorial steps as incremental tags:
 
 ### Presentation
 
-- [1.1.0-surface](https://github.com/benc-uk/vulkan-rust/tree/1.0.5-surface/triangle) - Creating a Vulkan surface for the window.
+- [1.1.0-surface](https://github.com/benc-uk/vulkan-rust/tree/1.1.0-surface/triangle) - Creating a Vulkan surface for the window.
