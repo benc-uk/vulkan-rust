@@ -18,5 +18,7 @@ In this repository the code for this app is in the [triangle/ folder](./triangle
 
 Links to the tutorial steps as incremental branches:
 
-- [00-setup](https://github.com/benc-uk/vulkan-rust/tree/00-setup/triangle) - Initial setup of the project, including dependencies and basic window creation.
-- [01-instance](https://github.com/benc-uk/vulkan-rust/tree/01-instance/triangle) - Creating a Vulkan instance and setting up the application info.
+- [1.0.0-setup](https://github.com/benc-uk/vulkan-rust/tree/1.0.0-setup/triangle) - Initial setup of the project, including dependencies and basic window creation.
+- [1.0.1-instance](https://github.com/benc-uk/vulkan-rust/tree/1.0.1-instance/triangle) - Creating a Vulkan instance and setting up the application info.
+- [1.0.2-validation-layers](https://github.com/benc-uk/vulkan-rust/tree/1.0.2-validation-layers/triangle) - Adding validation layers to help catch mistakes in Vulkan usage.
+- [1.0.3-physical-devices](https://github.com/benc-uk/vulkan-rust/tree/1.0.3-physical-devices/triangle) - Enumerating physical devices and queue families.

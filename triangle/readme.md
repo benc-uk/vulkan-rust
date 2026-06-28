@@ -27,3 +27,12 @@ sudo apt install vulkan-validationlayers
 This branch equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/02_Validation_layers.html
+
+## Step: 03 - Physical Devices
+
+Refactored the boilerplate Vulkan code into a `vulkan` module, and added code to enumerate physical devices and queue families.
+This is the first step in selecting a GPU to use for rendering.
+
+This branch equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/03_Physical_devices_and_queue_families.html
