@@ -1,4 +1,4 @@
-.PHONY: run build fmt clippy clean
+.PHONY: run build fmt clippy clean shaders release release-windows
 
 run:
 	cargo run
