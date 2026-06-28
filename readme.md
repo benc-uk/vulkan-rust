@@ -10,13 +10,14 @@ Things I want to do:
 
 ## 1. Triangle App
 
-This is the minimal Vulkan application that draws a triangle on the screen. It is based on the Vulkan tutorial, but implemented in Rust using `ash` for Vulkan bindings and `winit` for window creation and event handling.
+This is the minimal Vulkan application that draws a single triangle on the screen. It is based on the official Vulkan tutorial.
+Drawing a single triangle doesn't seem like much, but there's a lot of setup involved in getting even to that point!
 
 See https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/00_Base_code.html
 
 In this repository the code for this app is in the [triangle/ folder](./triangle).
 
-Links to the tutorial steps as incremental branches:
+Links to the tutorial steps as incremental tags:
 
 - [1.0.0-setup](https://github.com/benc-uk/vulkan-rust/tree/1.0.0-setup/triangle) - Initial setup of the project, including dependencies and basic window creation.
 - [1.0.1-instance](https://github.com/benc-uk/vulkan-rust/tree/1.0.1-instance/triangle) - Creating a Vulkan instance and setting up the application info.
