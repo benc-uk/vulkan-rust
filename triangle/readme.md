@@ -49,6 +49,8 @@ This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/00_Setup/04_Logical_device_and_queues.html
 
+# Presentation
+
 ## Step: 05 - Surface
 
 Added code to create a Vulkan surface for the window, this also includes a refactor of the `get_device` & `get_physical_device` functions to
@@ -65,3 +67,11 @@ Swapchain creation is the next step in setting up the presentation pipeline. Thi
 This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html
+
+## Step: 07 - Image Views
+
+Image views are the next step in setting up the presentation pipeline. This includes creating an image view for each swapchain image. Which unlike the swapchain creation is a small amount of code.
+
+This tag equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/02_Image_views.html

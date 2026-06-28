@@ -31,3 +31,4 @@ Links to the tutorial steps as incremental tags:
 
 - [1.1.0-surface](https://github.com/benc-uk/vulkan-rust/tree/1.1.0-surface/triangle) - Creating a Vulkan surface for the window.
 - [1.1.1-swapchain](https://github.com/benc-uk/vulkan-rust/tree/1.1.1-swapchain/triangle) - Setting up the swapchain for presenting images to the window.
+- [1.1.2-image-views](https://github.com/benc-uk/vulkan-rust/tree/1.1.2-image-views/triangle) - Creating image views for the swapchain images.
