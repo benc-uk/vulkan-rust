@@ -57,3 +57,11 @@ a single function that returns the physical device, logical device, and graphics
 This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/00_Window_surface.html
+
+## Step: 06 - Swapchain
+
+Swapchain creation is the next step in setting up the presentation pipeline. This includes creating a swapchain, and getting the swapchain images. Which is a surpringly large amount of code for a small step, but it's another step in the Vulkan tutorial.
+
+This tag equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html
