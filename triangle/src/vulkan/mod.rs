@@ -9,7 +9,7 @@ use std::ffi::CStr;
 
 /// Initializes Vulkan with ash and returns the Vulkan entry and instance.
 /// No error handling is performed in this function; it will panic if Vulkan initialization fails.
-pub fn init(display_handle: RawDisplayHandle, app_name: &str) -> (ash::Entry, ash::Instance) {
+pub fn init(display_handle: RawDisplayHandle, app_name: &str, api_minor: u32) -> (ash::Entry, ash::Instance) {
   unsafe {
     // Step 0: Loads the system Vulkan loader; valid as long as a Vulkan ICD is installed.
     let entry = ash::Entry::load().unwrap();
@@ -23,7 +23,7 @@ pub fn init(display_handle: RawDisplayHandle, app_name: &str) -> (ash::Entry, as
       .application_version(0)
       .engine_name(&app_name_c)
       .engine_version(0)
-      .api_version(vk::make_api_version(0, 1, 0, 0));
+      .api_version(vk::make_api_version(0, 1, api_minor, 0));
 
     // Step 2: Enumerate required extensions for the Vulkan instance, needs ash_window & raw_window_handle
     let extensions = enumerate_required_extensions(display_handle).unwrap();
@@ -232,4 +232,22 @@ pub fn create_image_view(device: &ash::Device, image: ash::vk::Image) -> ash::vk
 
     device.create_image_view(&create_info, None).expect("Failed to create image view")
   }
+}
+
+/// Small utility function to create a shader module from SPIR-V bytecode. Returns the shader module handle.
+pub fn create_shader_module(device: &ash::Device, code_bytes: &[u8]) -> ash::vk::ShaderModule {
+  unsafe {
+    println!("Creating shader module from SPIR-V bytecode of length: {}", code_bytes.len());
+
+    let mut vertex_spv_file = std::io::Cursor::new(code_bytes);
+    let code = ash::util::read_spv(&mut vertex_spv_file).expect("Failed to read SPIR-V code");
+    let shader_info = vk::ShaderModuleCreateInfo::default().code(&code);
+    device.create_shader_module(&shader_info, None).expect("Failed to create shader module")
+  }
+}
+
+/// Small helper function to create a shader stage info struct for pipeline creation. Returns the shader stage info.
+pub fn create_shader_stage_info<'a>(shader_module: ash::vk::ShaderModule, stage: ash::vk::ShaderStageFlags, entry_name: &'a CStr) -> ash::vk::PipelineShaderStageCreateInfo<'a> {
+  println!("Creating shader stage info for stage: {:?}, entry point: {:?}", stage, entry_name);
+  vk::PipelineShaderStageCreateInfo::default().module(shader_module).stage(stage).name(entry_name)
 }

@@ -1,3 +1,4 @@
+use ash::vk;
 use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
 use winit::application::ApplicationHandler;
@@ -5,6 +6,8 @@ use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
+
+const SHADER_SPV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader.spv"));
 
 use crate::vulkan;
 
@@ -50,7 +53,7 @@ impl ApplicationHandler for VulkanApp {
       let disp_handle = win.display_handle().unwrap().as_raw();
       let win_handle = win.window_handle().unwrap().as_raw();
 
-      let (entry, instance) = vulkan::init(disp_handle, &self.name);
+      let (entry, instance) = vulkan::init(disp_handle, &self.name, 4);
 
       let (surface, surface_loader) = vulkan::get_surface(&entry, &instance, disp_handle, win_handle);
 
@@ -63,6 +66,11 @@ impl ApplicationHandler for VulkanApp {
         let image_view = vulkan::create_image_view(&device, *image);
         image_views.push(image_view);
       }
+
+      let shader_mod = vulkan::create_shader_module(&device, SHADER_SPV);
+      let vert_stage = vulkan::create_shader_stage_info(shader_mod, vk::ShaderStageFlags::VERTEX, c"vertMain");
+      let frag_stage = vulkan::create_shader_stage_info(shader_mod, vk::ShaderStageFlags::FRAGMENT, c"fragMain");
+      let _shader_stages = vec![vert_stage, frag_stage];
 
       self.entry = Some(entry);
       self.instance = Some(instance);
