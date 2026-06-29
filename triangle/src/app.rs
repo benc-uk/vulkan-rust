@@ -72,6 +72,8 @@ impl ApplicationHandler for VulkanApp {
       let frag_stage = vulkan::create_shader_stage_info(shader_mod, vk::ShaderStageFlags::FRAGMENT, c"fragMain");
       let _shader_stages = vec![vert_stage, frag_stage];
 
+      vulkan::create_pipeline(&device);
+
       self.entry = Some(entry);
       self.instance = Some(instance);
       self.window = Some(win);

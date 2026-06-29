@@ -251,3 +251,38 @@ pub fn create_shader_stage_info<'a>(shader_module: ash::vk::ShaderModule, stage:
   println!("Creating shader stage info for stage: {:?}, entry point: {:?}", stage, entry_name);
   vk::PipelineShaderStageCreateInfo::default().module(shader_module).stage(stage).name(entry_name)
 }
+
+/// Creates a pipeline, we wil use dynamic rendering, so we don't need a render pass. Returns the pipeline handle.
+pub fn create_pipeline(device: &ash::Device) {
+  // First set up the fixed function stages of the pipeline
+
+  // Vertex input state, we have no vertex data for now, so it's empty
+  let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::default();
+
+  // Input assembly state, we will use triangle list for now
+  let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+
+  // Viewport and scissor, we will use dynamic state for now, so we don't need to set them here
+  let viewport_state = vk::PipelineViewportStateCreateInfo::default().viewport_count(1).scissor_count(1);
+
+  // Rasterizer state, we will use fill mode and backface culling for now
+  let rasterizer = vk::PipelineRasterizationStateCreateInfo::default()
+    .polygon_mode(vk::PolygonMode::FILL)
+    .cull_mode(vk::CullModeFlags::BACK)
+    .front_face(vk::FrontFace::CLOCKWISE);
+
+  // Multisampling state, we will use no multisampling for now
+  let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
+    .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+    .sample_shading_enable(false);
+
+  // Colour blending state, we will use no blending for now
+  let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default().blend_enable(false);
+  let blend_state = vk::PipelineColorBlendStateCreateInfo::default().attachments(std::slice::from_ref(&color_blend_attachment));
+
+  // Now we can create the pipeline layout, which is empty for now
+  let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default();
+  let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None).expect("Failed to create pipeline layout") };
+
+  // No actual pipeline creation yet, comes later...
+}
