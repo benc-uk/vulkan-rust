@@ -97,9 +97,15 @@ pub fn get_device(instance: &ash::Instance, surface_loader: &surface::Instance, 
     // Enable the swapchain extension, which is required for rendering to a window surface
     let device_extension_names_raw = [swapchain::NAME.as_ptr()];
 
+    // Enable dynamic rendering (core in 1.3) so we can skip render passes, and shader draw parameters which most Slang shaders need
+    let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true);
+    let mut vk11 = vk::PhysicalDeviceVulkan11Features::default().shader_draw_parameters(true);
+
     let device_create_info = vk::DeviceCreateInfo::default()
       .queue_create_infos(std::slice::from_ref(&queue_info))
-      .enabled_extension_names(&device_extension_names_raw);
+      .enabled_extension_names(&device_extension_names_raw)
+      .push_next(&mut dynamic_rendering)
+      .push_next(&mut vk11);
 
     let device = instance.create_device(pdevice, &device_create_info, None).unwrap();
 
@@ -139,7 +145,7 @@ pub fn create_swapchain(
   surface_loader: &surface::Instance,
   surface: ash::vk::SurfaceKHR,
   size: (u32, u32),
-) -> (ash::vk::SwapchainKHR, swapchain::Device, Vec<ash::vk::Image>) {
+) -> (ash::vk::SwapchainKHR, swapchain::Device, Vec<ash::vk::Image>, ash::vk::Format) {
   unsafe {
     // Step 1. First query the surface formats supported
     let surface_formats = surface_loader
@@ -204,14 +210,13 @@ pub fn create_swapchain(
       present_mode
     );
 
-    (swapchain, swapchain_loader, images)
+    (swapchain, swapchain_loader, images, surface_format.format)
   }
 }
 
-pub fn create_image_view(device: &ash::Device, image: ash::vk::Image) -> ash::vk::ImageView {
+/// Helper function to create an image view for a given image and format. Returns the image view handle.
+pub fn create_image_view(device: &ash::Device, image: ash::vk::Image, format: ash::vk::Format) -> ash::vk::ImageView {
   unsafe {
-    let format = vk::Format::B8G8R8A8_SRGB; // This should match the swapchain image format
-
     let create_info = vk::ImageViewCreateInfo::default()
       .image(image)
       .view_type(vk::ImageViewType::TYPE_2D)
@@ -253,36 +258,62 @@ pub fn create_shader_stage_info<'a>(shader_module: ash::vk::ShaderModule, stage:
 }
 
 /// Creates a pipeline, we wil use dynamic rendering, so we don't need a render pass. Returns the pipeline handle.
-pub fn create_pipeline(device: &ash::Device) {
+/// This pipeline will be very basic, with no vertex input, no blending, no multisampling, and no depth testing. It will just render a triangle to the screen.
+pub fn create_pipeline(device: &ash::Device, stages: Vec<vk::PipelineShaderStageCreateInfo>, format: vk::Format) -> (ash::vk::Pipeline, ash::vk::PipelineLayout) {
+  let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+  let dynamic_state = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+
   // First set up the fixed function stages of the pipeline
 
   // Vertex input state, we have no vertex data for now, so it's empty
-  let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::default();
+  let vertex_input = vk::PipelineVertexInputStateCreateInfo::default();
 
   // Input assembly state, we will use triangle list for now
   let input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST);
 
-  // Viewport and scissor, we will use dynamic state for now, so we don't need to set them here
+  // Viewport and scissor, we will use dynamic state for now, so we don't need to set them here, just the counts
   let viewport_state = vk::PipelineViewportStateCreateInfo::default().viewport_count(1).scissor_count(1);
 
   // Rasterizer state, we will use fill mode and backface culling for now
   let rasterizer = vk::PipelineRasterizationStateCreateInfo::default()
     .polygon_mode(vk::PolygonMode::FILL)
     .cull_mode(vk::CullModeFlags::BACK)
-    .front_face(vk::FrontFace::CLOCKWISE);
+    .front_face(vk::FrontFace::CLOCKWISE)
+    .line_width(1.0);
 
   // Multisampling state, we will use no multisampling for now
   let multisampling = vk::PipelineMultisampleStateCreateInfo::default()
     .rasterization_samples(vk::SampleCountFlags::TYPE_1)
     .sample_shading_enable(false);
 
-  // Colour blending state, we will use no blending for now
-  let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default().blend_enable(false);
+  // Colour blending state, we will use no blending for now, just write to the framebuffer
+  let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default().color_write_mask(vk::ColorComponentFlags::RGBA);
   let blend_state = vk::PipelineColorBlendStateCreateInfo::default().attachments(std::slice::from_ref(&color_blend_attachment));
 
   // Now we can create the pipeline layout, which is empty for now
   let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default();
   let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None).expect("Failed to create pipeline layout") };
 
-  // No actual pipeline creation yet, comes later...
+  // Dynamic rendering requires us to specify the color attachment formats in the pipeline creation info,
+  // otherwise we will get a validation error. We will use the format passed as an argument, which is the format we used for the swapchain images.
+  let formats = [format];
+  let mut rendering_info = vk::PipelineRenderingCreateInfo::default().color_attachment_formats(&formats);
+
+  // Finally create the graphics pipeline, we will use dynamic rendering, so we don't need a render pass or framebuffers
+  let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
+    .stages(&stages)
+    .vertex_input_state(&vertex_input)
+    .input_assembly_state(&input_assembly)
+    .viewport_state(&viewport_state)
+    .rasterization_state(&rasterizer)
+    .multisample_state(&multisampling)
+    .color_blend_state(&blend_state)
+    .layout(pipeline_layout)
+    .dynamic_state(&dynamic_state)
+    .push_next(&mut rendering_info);
+
+  let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), std::slice::from_ref(&pipeline_info), None) }.expect("Failed to create graphics pipeline")[0];
+
+  println!("Graphics pipeline created successfully.");
+  (pipeline, pipeline_layout)
 }

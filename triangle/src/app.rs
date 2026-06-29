@@ -59,20 +59,20 @@ impl ApplicationHandler for VulkanApp {
 
       let (device, phys_device, _qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
 
-      let (_swapchain, _swapchain_loader, images) = vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
+      let (swapchain, _swapchain_loader, images, format) = vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
 
       let mut image_views = vec![];
       for image in &images {
-        let image_view = vulkan::create_image_view(&device, *image);
+        let image_view = vulkan::create_image_view(&device, *image, format);
         image_views.push(image_view);
       }
 
       let shader_mod = vulkan::create_shader_module(&device, SHADER_SPV);
       let vert_stage = vulkan::create_shader_stage_info(shader_mod, vk::ShaderStageFlags::VERTEX, c"vertMain");
       let frag_stage = vulkan::create_shader_stage_info(shader_mod, vk::ShaderStageFlags::FRAGMENT, c"fragMain");
-      let _shader_stages = vec![vert_stage, frag_stage];
+      let shader_stages = vec![vert_stage, frag_stage];
 
-      vulkan::create_pipeline(&device);
+      let (_pipeline, _pipeline_layout) = vulkan::create_pipeline(&device, shader_stages, format);
 
       self.entry = Some(entry);
       self.instance = Some(instance);
