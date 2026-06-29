@@ -36,3 +36,4 @@ Links to the tutorial steps as incremental tags:
 ### Pipeline
 
 - [1.2.0-shader-modules](https://github.com/benc-uk/vulkan-rust/tree/1.2.0-shader-modules/triangle) - Creating shader modules from SPIR-V, compiling Slang shaders, and beginning to set up the graphics pipeline.
+- [1.2.1-fixed-func](https://github.com/benc-uk/vulkan-rust/tree/1.2.1-fixed-func/triangle) - Creating the fixed-function pipeline stages and the pipeline layout.

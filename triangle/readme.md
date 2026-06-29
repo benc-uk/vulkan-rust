@@ -83,3 +83,11 @@ Adds code to create shader modules from SPIR-V bytecode, and an introduction to 
 This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/01_Shader_modules.html
+
+## Step: 08 - Fixed Function
+
+Configures the various fixed-function stages of the graphics pipeline, including the input assembly, viewport, rasterizer, and color blending. Also sets up the pipeline layout.
+
+This tag equates to the tutorial step at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/02_Fixed_functions.html
