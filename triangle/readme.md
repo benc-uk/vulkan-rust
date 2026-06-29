@@ -100,3 +100,11 @@ This tag equates to the tutorial steps at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/03_Render_passes.html  
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/04_Conclusion.html
+
+## Step: 11 - Command Buffers
+
+Create command buffers and record the commands to draw a triangle. Also add helper to transition the swapchain image layouts, and to submit the command buffers to the graphics queue.
+
+This tag equates to the tutorial steps at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html
