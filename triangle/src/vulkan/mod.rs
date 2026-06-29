@@ -97,14 +97,15 @@ pub fn get_device(instance: &ash::Instance, surface_loader: &surface::Instance, 
     // Enable the swapchain extension, which is required for rendering to a window surface
     let device_extension_names_raw = [swapchain::NAME.as_ptr()];
 
-    // Enable dynamic rendering (core in 1.3) so we can skip render passes, and shader draw parameters which most Slang shaders need
-    let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true);
+    // Enable dynamic rendering and synchronization2 so we can use the new pipeline barrier API
+    let mut vk13 = vk::PhysicalDeviceVulkan13Features::default().dynamic_rendering(true).synchronization2(true);
+    // Shader draw parameters is a Vulkan 1.1 feature that most Slang shaders need
     let mut vk11 = vk::PhysicalDeviceVulkan11Features::default().shader_draw_parameters(true);
 
     let device_create_info = vk::DeviceCreateInfo::default()
       .queue_create_infos(std::slice::from_ref(&queue_info))
       .enabled_extension_names(&device_extension_names_raw)
-      .push_next(&mut dynamic_rendering)
+      .push_next(&mut vk13)
       .push_next(&mut vk11);
 
     let device = instance.create_device(pdevice, &device_create_info, None).unwrap();
@@ -145,7 +146,7 @@ pub fn create_swapchain(
   surface_loader: &surface::Instance,
   surface: ash::vk::SurfaceKHR,
   size: (u32, u32),
-) -> (ash::vk::SwapchainKHR, swapchain::Device, Vec<ash::vk::Image>, ash::vk::Format) {
+) -> (ash::vk::SwapchainKHR, swapchain::Device, Vec<ash::vk::Image>, ash::vk::Format, ash::vk::Extent2D) {
   unsafe {
     // Step 1. First query the surface formats supported
     let surface_formats = surface_loader
@@ -210,7 +211,7 @@ pub fn create_swapchain(
       present_mode
     );
 
-    (swapchain, swapchain_loader, images, surface_format.format)
+    (swapchain, swapchain_loader, images, surface_format.format, extent)
   }
 }
 
@@ -316,4 +317,62 @@ pub fn create_pipeline(device: &ash::Device, stages: Vec<vk::PipelineShaderStage
 
   println!("Graphics pipeline created successfully.");
   (pipeline, pipeline_layout)
+}
+
+/// Small helper function to create a command pool & buffers for the given queue family index. Returns a vector of command buffers.
+pub fn allocate_command_buffers(device: &ash::Device, queue_family_index: u32, count: u32) -> (Vec<ash::vk::CommandBuffer>, ash::vk::CommandPool) {
+  let pool_info = vk::CommandPoolCreateInfo::default()
+    .queue_family_index(queue_family_index)
+    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+  let command_pool = unsafe { device.create_command_pool(&pool_info, None).expect("Failed to create command pool") };
+
+  let alloc_info = vk::CommandBufferAllocateInfo::default().command_pool(command_pool).command_buffer_count(count);
+  let command_buffers = unsafe { device.allocate_command_buffers(&alloc_info).expect("Failed to allocate command buffers") };
+
+  println!("Allocated {} command buffers.", command_buffers.len());
+  (command_buffers, command_pool)
+}
+
+/// Records an image layout transition into the given command buffer using a synchronization2 pipeline barrier.
+/// With dynamic rendering there is no render pass to do this for us, so we transition the swapchain image manually:
+/// UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL before drawing, then COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR after.
+/// The stage/access masks describe the execution & memory dependency: src is the work that must finish first, dst is the work that must wait.
+#[allow(clippy::too_many_arguments)]
+pub fn transition_image_layout(
+  device: &ash::Device,
+  command_buffer: vk::CommandBuffer,
+  image: vk::Image,
+  old_layout: vk::ImageLayout,
+  new_layout: vk::ImageLayout,
+  src_access_mask: vk::AccessFlags2,
+  dst_access_mask: vk::AccessFlags2,
+  src_stage_mask: vk::PipelineStageFlags2,
+  dst_stage_mask: vk::PipelineStageFlags2,
+) {
+  // The whole image: colour aspect, single mip level, single array layer (swapchain images are flat 2D colour images)
+  let subresource_range = vk::ImageSubresourceRange::default()
+    .aspect_mask(vk::ImageAspectFlags::COLOR)
+    .base_mip_level(0)
+    .level_count(1)
+    .base_array_layer(0)
+    .layer_count(1);
+
+  // The barrier bundles the layout transition with the execution & memory dependency
+  let barrier = vk::ImageMemoryBarrier2::default()
+    .src_stage_mask(src_stage_mask)
+    .src_access_mask(src_access_mask)
+    .dst_stage_mask(dst_stage_mask)
+    .dst_access_mask(dst_access_mask)
+    .old_layout(old_layout)
+    .new_layout(new_layout)
+    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+    .image(image)
+    .subresource_range(subresource_range);
+
+  // DependencyInfo carries the array of barriers into the single pipeline_barrier2 call
+  let barriers = [barrier];
+  let dependency_info = vk::DependencyInfo::default().image_memory_barriers(&barriers);
+
+  unsafe { device.cmd_pipeline_barrier2(command_buffer, &dependency_info) };
 }
