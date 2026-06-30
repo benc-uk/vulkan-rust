@@ -260,7 +260,7 @@ pub fn create_shader_stage_info<'a>(shader_module: ash::vk::ShaderModule, stage:
 
 /// Creates a pipeline, we wil use dynamic rendering, so we don't need a render pass. Returns the pipeline handle.
 /// This pipeline will be very basic, with no vertex input, no blending, no multisampling, and no depth testing. It will just render a triangle to the screen.
-pub fn create_pipeline(device: &ash::Device, stages: Vec<vk::PipelineShaderStageCreateInfo>, format: vk::Format) -> (ash::vk::Pipeline, ash::vk::PipelineLayout) {
+pub fn create_pipeline(device: &ash::Device, stages: Vec<vk::PipelineShaderStageCreateInfo>, format: vk::Format) -> ash::vk::Pipeline {
   let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
   let dynamic_state = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
@@ -316,7 +316,7 @@ pub fn create_pipeline(device: &ash::Device, stages: Vec<vk::PipelineShaderStage
   let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), std::slice::from_ref(&pipeline_info), None) }.expect("Failed to create graphics pipeline")[0];
 
   println!("Graphics pipeline created successfully.");
-  (pipeline, pipeline_layout)
+  pipeline
 }
 
 /// Small helper function to create a command pool & buffers for the given queue family index. Returns a vector of command buffers.

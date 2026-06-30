@@ -1,8 +1,11 @@
+use ash::khr::surface;
+use ash::khr::swapchain;
 use ash::vk;
 use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
@@ -12,6 +15,7 @@ const SHADER_SPV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader.spv")
 use crate::vulkan;
 
 const SIZE: (u32, u32) = (1024, 768);
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct VulkanApp {
   name: String,
@@ -19,17 +23,21 @@ pub struct VulkanApp {
   instance: Option<ash::Instance>,
   entry: Option<ash::Entry>,
   device: Option<ash::Device>,
+  physical_device: Option<vk::PhysicalDevice>,
   command_buffers: Option<Vec<vk::CommandBuffer>>,
   swapchain: Option<ash::vk::SwapchainKHR>,
   swapchain_device: Option<ash::khr::swapchain::Device>,
+  surface: Option<vk::SurfaceKHR>,
+  surface_loader: Option<surface::Instance>,
   images: Option<Vec<vk::Image>>,
   image_views: Option<Vec<vk::ImageView>>,
   pipeline: Option<vk::Pipeline>,
   extent: Option<vk::Extent2D>,
   queue: vk::Queue,
-  present_complete_semaphore: vk::Semaphore,
-  render_complete_semaphore: vk::Semaphore,
-  draw_fence: vk::Fence,
+  present_complete_semaphores: [vk::Semaphore; MAX_FRAMES_IN_FLIGHT],
+  render_complete_semaphores: [vk::Semaphore; MAX_FRAMES_IN_FLIGHT],
+  draw_fences: [vk::Fence; MAX_FRAMES_IN_FLIGHT],
+  frame_index: usize,
 }
 
 impl VulkanApp {
@@ -40,32 +48,48 @@ impl VulkanApp {
       instance: None,
       entry: None,
       device: None,
+      physical_device: None,
       command_buffers: None,
       swapchain: None,
       swapchain_device: None,
+      surface: None,
+      surface_loader: None,
       images: None,
       image_views: None,
       pipeline: None,
       extent: None,
       queue: vk::Queue::null(),
-      present_complete_semaphore: vk::Semaphore::null(),
-      render_complete_semaphore: vk::Semaphore::null(),
-      draw_fence: vk::Fence::null(),
+      present_complete_semaphores: [vk::Semaphore::null(); MAX_FRAMES_IN_FLIGHT],
+      render_complete_semaphores: [vk::Semaphore::null(); MAX_FRAMES_IN_FLIGHT],
+      draw_fences: [vk::Fence::null(); MAX_FRAMES_IN_FLIGHT],
+      frame_index: 0,
     })
   }
 
   pub fn is_initialized(&self) -> bool {
-    self.window.is_some() && self.instance.is_some() && self.entry.is_some() && self.device.is_some()
+    self.window.is_some()
+      && self.instance.is_some()
+      && self.entry.is_some()
+      && self.device.is_some()
+      && self.physical_device.is_some()
+      && self.command_buffers.is_some()
+      && self.swapchain.is_some()
+      && self.swapchain_device.is_some()
+      && self.surface.is_some()
+      && self.surface_loader.is_some()
+      && self.images.is_some()
+      && self.image_views.is_some()
+      && self.pipeline.is_some()
+      && self.extent.is_some()
   }
 
   // This carries out the actual rendering commands for a given swapchain image index. It is called once per frame, and the img_index is provided by the swapchain acquire_next_image call.
   // The command buffer is recorded with the commands to transition the image layout, begin rendering, bind the pipeline, set the viewport and scissor, draw a triangle, end rendering, and transition the image layout back to present.
-  fn record_command_buffer(&mut self, img_index: u32) {
+  fn record_command_buffer(&mut self, frame_index: usize, img_index: usize) {
     unsafe {
-      let img_index = img_index as usize;
       let device = self.device.as_ref().unwrap();
       let command_buffers = self.command_buffers.as_ref().unwrap();
-      let command_buffer = command_buffers[img_index];
+      let command_buffer = command_buffers[frame_index];
       let extent = self.extent.unwrap();
       let image = self.images.as_ref().unwrap()[img_index];
       let image_view = self.image_views.as_ref().unwrap()[img_index];
@@ -153,6 +177,47 @@ impl VulkanApp {
       device.end_command_buffer(command_buffer).unwrap();
     }
   }
+
+  fn recreate_swapchain(&mut self, new_size: PhysicalSize<u32>) {
+    if !self.is_initialized() {
+      return;
+    }
+
+    let device = self.device.as_ref().unwrap();
+    unsafe {
+      device.device_wait_idle().unwrap();
+
+      // Loop over exitsing image views and destroy them
+      if let Some(image_views) = &self.image_views {
+        image_views.iter().for_each(|&image_view| {
+          device.destroy_image_view(image_view, None);
+        });
+      }
+
+      // Destroy the old swapchain and its associated device
+      if let Some(swapchain) = self.swapchain.take() {
+        let swapchain_device = self.swapchain_device.take().unwrap();
+        swapchain_device.destroy_swapchain(swapchain, None);
+      }
+    }
+
+    let (swapchain, swapchain_device, images, format, extent) = vulkan::create_swapchain(
+      self.instance.as_ref().unwrap(),
+      device,
+      self.physical_device.unwrap(),
+      self.surface_loader.as_ref().unwrap(),
+      self.surface.unwrap(),
+      (new_size.width, new_size.height),
+    );
+
+    let image_views = images.iter().map(|&img| vulkan::create_image_view(device, img, format)).collect();
+
+    self.swapchain = Some(swapchain);
+    self.swapchain_device = Some(swapchain_device);
+    self.images = Some(images);
+    self.image_views = Some(image_views);
+    self.extent = Some(extent);
+  }
 }
 
 impl ApplicationHandler for VulkanApp {
@@ -164,7 +229,8 @@ impl ApplicationHandler for VulkanApp {
           Window::default_attributes()
             .with_inner_size(LogicalSize::new(SIZE.0, SIZE.1))
             .with_title(&self.name)
-            .with_decorations(true),
+            .with_decorations(true)
+            .with_resizable(true),
         )
         .unwrap();
 
@@ -181,14 +247,10 @@ impl ApplicationHandler for VulkanApp {
       let (device, phys_device, qf_index) = vulkan::get_device(&instance, &surface_loader, surface);
 
       // Step 4. Create a swapchain for the window surface and get the swapchain loader, images, and format
-      let (swapchain, _swapchain_loader, images, format, extent) = vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
+      let (swapchain, swapchain_device, images, format, extent) = vulkan::create_swapchain(&instance, &device, phys_device, &surface_loader, surface, SIZE);
 
       // Step 5. Create image views for the swapchain images
-      let mut image_views = vec![];
-      for image in &images {
-        let image_view = vulkan::create_image_view(&device, *image, format);
-        image_views.push(image_view);
-      }
+      let image_views = images.iter().map(|&img| vulkan::create_image_view(&device, img, format)).collect();
 
       // Step 6. Create shader modules and stage info for vertex and fragment shaders
       let shader_mod = vulkan::create_shader_module(&device, SHADER_SPV);
@@ -197,27 +259,32 @@ impl ApplicationHandler for VulkanApp {
       let shader_stages = vec![vert_stage, frag_stage];
 
       // Step 7. Create a graphics pipeline using the shader stages and swapchain/image format
-      let (pipeline, _pipeline_layout) = vulkan::create_pipeline(&device, shader_stages, format);
+      let pipeline = vulkan::create_pipeline(&device, shader_stages, format);
 
       // Step 8. Create command pool and allocate command buffers for rendering (one per swapchain image)
-      let (command_buffers, _command_pool) = vulkan::allocate_command_buffers(&device, qf_index, images.len() as u32);
+      let (command_buffers, _command_pool) = vulkan::allocate_command_buffers(&device, qf_index, MAX_FRAMES_IN_FLIGHT as u32);
 
       // Step 9. Store all the created Vulkan objects in the VulkanApp struct for later use
       self.entry = Some(entry);
       self.instance = Some(instance);
       self.window = Some(win);
+      self.physical_device = Some(phys_device);
       self.command_buffers = Some(command_buffers);
       self.swapchain = Some(swapchain);
-      self.swapchain_device = Some(_swapchain_loader);
+      self.swapchain_device = Some(swapchain_device);
+      self.surface = Some(surface);
+      self.surface_loader = Some(surface_loader);
       self.images = Some(images);
       self.image_views = Some(image_views);
       self.extent = Some(extent);
       self.pipeline = Some(pipeline);
       unsafe {
         self.queue = device.get_device_queue(qf_index, 0);
-        self.present_complete_semaphore = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
-        self.render_complete_semaphore = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
-        self.draw_fence = device.create_fence(&vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED), None).unwrap()
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+          self.present_complete_semaphores[i] = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
+          self.render_complete_semaphores[i] = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
+          self.draw_fences[i] = device.create_fence(&vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED), None).unwrap();
+        }
       }
       self.device = Some(device);
 
@@ -228,6 +295,11 @@ impl ApplicationHandler for VulkanApp {
   // Trap window events, such as close requests and redraw requests
   fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: winit::event::WindowEvent) {
     match event {
+      WindowEvent::Resized(phys_size) => {
+        // When we detect a resize - we have to recreate the swapchain and related resources
+        self.recreate_swapchain(phys_size);
+      }
+
       WindowEvent::CloseRequested => {
         event_loop.exit();
       }
@@ -235,7 +307,7 @@ impl ApplicationHandler for VulkanApp {
       // Main loop here...
       WindowEvent::RedrawRequested => {
         let device = self.device.as_ref().unwrap();
-        let draw_fence = self.draw_fence;
+        let draw_fence = self.draw_fences[self.frame_index];
         let swapchain = *self.swapchain.as_ref().unwrap();
         let swapchain_device = self.swapchain_device.as_ref().unwrap();
 
@@ -243,23 +315,34 @@ impl ApplicationHandler for VulkanApp {
         unsafe {
           // Wait draw fence to ensure the previous frame has finished rendering before we start a new one
           device.wait_for_fences(&[draw_fence], true, std::u64::MAX).unwrap();
-          device.reset_fences(&[draw_fence]).unwrap();
 
           // Acquire the next image from the swapchain, which gives us the index of the image to render to
           // The acquire_next_image call will signal the present_complete_semaphore when the image is ready to be rendered to
-          let (image_index, _) = swapchain_device
-            .acquire_next_image(swapchain, std::u64::MAX, self.present_complete_semaphore, vk::Fence::null())
-            .unwrap();
+          let next_img_res = swapchain_device.acquire_next_image(swapchain, std::u64::MAX, self.present_complete_semaphores[self.frame_index], vk::Fence::null());
 
-          self.record_command_buffer(image_index);
+          // If the swapchain is out of date (e.g. window resized), we skip this frame,
+          // The WindowEvent::Resized event will trigger a swapchain recreation, and the next frame will be rendered to the new swapchain
+          if next_img_res.is_err() {
+            return;
+          }
+
+          // Avoid deadlock by resetting the draw fence after aqcuiring the image, so that we can wait on it again for the next frame
+          device.reset_fences(&[draw_fence]).unwrap();
+
+          let (image_index, _is_suboptimal) = next_img_res.unwrap();
+
+          device
+            .reset_command_buffer(self.command_buffers.as_ref().unwrap()[self.frame_index], vk::CommandBufferResetFlags::empty())
+            .unwrap();
+          self.record_command_buffer(self.frame_index, image_index as usize);
 
           // Grab semaphores and command buffers for submission to the graphics queue.
           // The wait semaphore is the present_complete_semaphore, which will be signaled when the image is ready to be rendered to.
           // The signal semaphore is the render_complete_semaphore, which will be signaled when rendering is complete and the image is ready to be presented.
           let stage_flags = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-          let command_buffers = [self.command_buffers.as_ref().unwrap()[image_index as usize]];
-          let wait_semaphores = [self.present_complete_semaphore];
-          let signal_semaphores = [self.render_complete_semaphore];
+          let command_buffers = [self.command_buffers.as_ref().unwrap()[self.frame_index]];
+          let wait_semaphores = [self.present_complete_semaphores[self.frame_index]];
+          let signal_semaphores = [self.render_complete_semaphores[self.frame_index]];
 
           // Submit the command buffer to the graphics queue for execution.
           let submit_info = vk::SubmitInfo::default()
@@ -286,6 +369,9 @@ impl ApplicationHandler for VulkanApp {
 
         // Redraw the window to trigger the next frame. This will cause the window_event function to be called again
         self.window.as_ref().unwrap().request_redraw();
+
+        // Advance to the next frame
+        self.frame_index = (self.frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
       }
 
       _ => (),
