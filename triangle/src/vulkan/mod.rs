@@ -335,7 +335,6 @@ pub fn allocate_command_buffers(device: &ash::Device, queue_family_index: u32, c
 
 /// Records an image layout transition into the given command buffer using a synchronization2 pipeline barrier.
 /// With dynamic rendering there is no render pass to do this for us, so we transition the swapchain image manually:
-/// UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL before drawing, then COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR after.
 /// The stage/access masks describe the execution & memory dependency: src is the work that must finish first, dst is the work that must wait.
 #[allow(clippy::too_many_arguments)]
 pub fn transition_image_layout(

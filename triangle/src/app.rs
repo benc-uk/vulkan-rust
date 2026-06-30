@@ -21,11 +21,15 @@ pub struct VulkanApp {
   device: Option<ash::Device>,
   command_buffers: Option<Vec<vk::CommandBuffer>>,
   swapchain: Option<ash::vk::SwapchainKHR>,
-  swapchain_loader: Option<ash::khr::swapchain::Device>,
+  swapchain_device: Option<ash::khr::swapchain::Device>,
   images: Option<Vec<vk::Image>>,
   image_views: Option<Vec<vk::ImageView>>,
   pipeline: Option<vk::Pipeline>,
   extent: Option<vk::Extent2D>,
+  queue: vk::Queue,
+  present_complete_semaphore: vk::Semaphore,
+  render_complete_semaphore: vk::Semaphore,
+  draw_fence: vk::Fence,
 }
 
 impl VulkanApp {
@@ -38,11 +42,15 @@ impl VulkanApp {
       device: None,
       command_buffers: None,
       swapchain: None,
-      swapchain_loader: None,
+      swapchain_device: None,
       images: None,
       image_views: None,
       pipeline: None,
       extent: None,
+      queue: vk::Queue::null(),
+      present_complete_semaphore: vk::Semaphore::null(),
+      render_complete_semaphore: vk::Semaphore::null(),
+      draw_fence: vk::Fence::null(),
     })
   }
 
@@ -79,18 +87,18 @@ impl VulkanApp {
         vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT, // dst_stage
       );
 
-      let clear_val = vk::ClearValue {
-        color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 1.0] },
-      };
-
+      // Set up the rendering attachment info for the swapchain image. This includes the image view, layout, load/store ops, and clear value.
       let render_attachment = vk::RenderingAttachmentInfo::default()
         .image_view(image_view)
         .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::STORE)
-        .clear_value(clear_val);
+        .clear_value(vk::ClearValue {
+          color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 1.0] },
+        });
       let attachments = [render_attachment];
 
+      // RenderingInfo specifies the render area, layer count, and attachments.
       let rendering_info = vk::RenderingInfo::default()
         .render_area(vk::Rect2D {
           offset: vk::Offset2D { x: 0, y: 0 },
@@ -99,9 +107,11 @@ impl VulkanApp {
         .layer_count(1)
         .color_attachments(&attachments);
 
+      // Start rendering with the specified rendering info. This will set up the framebuffer and begin the render pass.
       device.cmd_begin_rendering(command_buffer, &rendering_info);
 
-      // bind the graphics pipeline and draw a triangle
+      // Bind the graphics pipeline we built earlier.
+      // This tells Vulkan to use our shaders and pipeline state for the upcoming draw calls.
       device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.unwrap());
 
       // Set the viewport and scissor to cover the entire swapchain image
@@ -121,10 +131,12 @@ impl VulkanApp {
       };
       device.cmd_set_scissor(command_buffer, 0, &[scissor]);
 
+      // FINALLY!! Issue the draw command to draw 3 verts, 1 instance, starting at vert 0 & instance 0
       device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
       device.cmd_end_rendering(command_buffer);
 
+      // Transition the image layout back to PRESENT_SRC_KHR so it can be presented to the swapchain
       vulkan::transition_image_layout(
         device,
         command_buffer,
@@ -137,6 +149,7 @@ impl VulkanApp {
         vk::PipelineStageFlags2::BOTTOM_OF_PIPE,          // dst_stage
       );
 
+      // And stop...
       device.end_command_buffer(command_buffer).unwrap();
     }
   }
@@ -186,20 +199,27 @@ impl ApplicationHandler for VulkanApp {
       // Step 7. Create a graphics pipeline using the shader stages and swapchain/image format
       let (pipeline, _pipeline_layout) = vulkan::create_pipeline(&device, shader_stages, format);
 
-      // Step 8. Create command pool and allocate command buffers for rendering
-      let (command_buffers, _command_pool) = vulkan::allocate_command_buffers(&device, qf_index, 1);
+      // Step 8. Create command pool and allocate command buffers for rendering (one per swapchain image)
+      let (command_buffers, _command_pool) = vulkan::allocate_command_buffers(&device, qf_index, images.len() as u32);
 
+      // Step 9. Store all the created Vulkan objects in the VulkanApp struct for later use
       self.entry = Some(entry);
       self.instance = Some(instance);
       self.window = Some(win);
-      self.device = Some(device);
       self.command_buffers = Some(command_buffers);
       self.swapchain = Some(swapchain);
-      self.swapchain_loader = Some(_swapchain_loader);
+      self.swapchain_device = Some(_swapchain_loader);
       self.images = Some(images);
       self.image_views = Some(image_views);
       self.extent = Some(extent);
       self.pipeline = Some(pipeline);
+      unsafe {
+        self.queue = device.get_device_queue(qf_index, 0);
+        self.present_complete_semaphore = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
+        self.render_complete_semaphore = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None).unwrap();
+        self.draw_fence = device.create_fence(&vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED), None).unwrap()
+      }
+      self.device = Some(device);
 
       println!("App is initialized: {}", self.is_initialized());
     }
@@ -212,7 +232,59 @@ impl ApplicationHandler for VulkanApp {
         event_loop.exit();
       }
 
+      // Main loop here...
       WindowEvent::RedrawRequested => {
+        let device = self.device.as_ref().unwrap();
+        let draw_fence = self.draw_fence;
+        let swapchain = *self.swapchain.as_ref().unwrap();
+        let swapchain_device = self.swapchain_device.as_ref().unwrap();
+
+        // This block carries out the actual rendering
+        unsafe {
+          // Wait draw fence to ensure the previous frame has finished rendering before we start a new one
+          device.wait_for_fences(&[draw_fence], true, std::u64::MAX).unwrap();
+          device.reset_fences(&[draw_fence]).unwrap();
+
+          // Acquire the next image from the swapchain, which gives us the index of the image to render to
+          // The acquire_next_image call will signal the present_complete_semaphore when the image is ready to be rendered to
+          let (image_index, _) = swapchain_device
+            .acquire_next_image(swapchain, std::u64::MAX, self.present_complete_semaphore, vk::Fence::null())
+            .unwrap();
+
+          self.record_command_buffer(image_index);
+
+          // Grab semaphores and command buffers for submission to the graphics queue.
+          // The wait semaphore is the present_complete_semaphore, which will be signaled when the image is ready to be rendered to.
+          // The signal semaphore is the render_complete_semaphore, which will be signaled when rendering is complete and the image is ready to be presented.
+          let stage_flags = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+          let command_buffers = [self.command_buffers.as_ref().unwrap()[image_index as usize]];
+          let wait_semaphores = [self.present_complete_semaphore];
+          let signal_semaphores = [self.render_complete_semaphore];
+
+          // Submit the command buffer to the graphics queue for execution.
+          let submit_info = vk::SubmitInfo::default()
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&stage_flags)
+            .command_buffers(&command_buffers)
+            .signal_semaphores(&signal_semaphores);
+
+          let device = self.device.as_ref().unwrap();
+          device.queue_submit(self.queue, &[submit_info], draw_fence).unwrap();
+
+          // Present the rendered image to the swapchain.
+          // Specifies the swapchain, the index of the image to present, and the semaphore to wait on before presenting
+          let swapchains = [swapchain];
+          let image_indices = [image_index];
+          let present_info = vk::PresentInfoKHR::default()
+            .wait_semaphores(&signal_semaphores)
+            .swapchains(&swapchains)
+            .image_indices(&image_indices);
+
+          let swapchain_device = self.swapchain_device.as_ref().unwrap();
+          swapchain_device.queue_present(self.queue, &present_info).unwrap();
+        }
+
+        // Redraw the window to trigger the next frame. This will cause the window_event function to be called again
         self.window.as_ref().unwrap().request_redraw();
       }
 
