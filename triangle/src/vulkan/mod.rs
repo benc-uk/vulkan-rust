@@ -33,10 +33,11 @@ pub fn init(display_handle: RawDisplayHandle, app_name: &str, api_minor: u32) ->
     }
 
     // Step 3: Add validation layers if in debug mode, to help catch mistakes in Vulkan usage
-    #[cfg(debug_assertions)]
+    // Disabled on Windows, only enabled in debug builds on other platforms
+    #[cfg(all(debug_assertions, not(target_os = "windows")))]
     // Needs the Vulkan SDK installed or `vulkan-validationlayers` package on Linux
     let validation_layers = [c"VK_LAYER_KHRONOS_validation"];
-    #[cfg(not(debug_assertions))]
+    #[cfg(any(not(debug_assertions), target_os = "windows"))]
     let validation_layers: [&CStr; 0] = [];
 
     let enabled_layer_names: Vec<*const i8> = validation_layers.iter().map(|&s| s.as_ptr() as *const i8).collect();
@@ -203,14 +204,6 @@ pub fn create_swapchain(
     let swapchain = swapchain_loader.create_swapchain(&swapchain_create_info, None).unwrap();
     let images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
 
-    println!(
-      "Swapchain created with {} images, format: {:?}, extent: {:?}, present mode: {:?}",
-      images.len(),
-      surface_format.format,
-      extent,
-      present_mode
-    );
-
     (swapchain, swapchain_loader, images, surface_format.format, extent)
   }
 }
@@ -222,12 +215,6 @@ pub fn create_image_view(device: &ash::Device, image: ash::vk::Image, format: as
       .image(image)
       .view_type(vk::ImageViewType::TYPE_2D)
       .format(format)
-      .components(vk::ComponentMapping {
-        r: vk::ComponentSwizzle::IDENTITY,
-        g: vk::ComponentSwizzle::IDENTITY,
-        b: vk::ComponentSwizzle::IDENTITY,
-        a: vk::ComponentSwizzle::IDENTITY,
-      })
       .subresource_range(vk::ImageSubresourceRange {
         aspect_mask: vk::ImageAspectFlags::COLOR,
         base_mip_level: 0,

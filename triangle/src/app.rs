@@ -1,5 +1,4 @@
 use ash::khr::surface;
-use ash::khr::swapchain;
 use ash::vk;
 use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
@@ -178,8 +177,14 @@ impl VulkanApp {
     }
   }
 
+  // Recreates the swapchain and its associated resources (image views, etc.) when the window is resized.
+  // This is called from the window_event handler when a WindowEvent::Resized event is received.
   fn recreate_swapchain(&mut self, new_size: PhysicalSize<u32>) {
     if !self.is_initialized() {
+      return;
+    }
+
+    if new_size.width == 0 || new_size.height == 0 {
       return;
     }
 
@@ -321,8 +326,8 @@ impl ApplicationHandler for VulkanApp {
           let next_img_res = swapchain_device.acquire_next_image(swapchain, std::u64::MAX, self.present_complete_semaphores[self.frame_index], vk::Fence::null());
 
           // If the swapchain is out of date (e.g. window resized), we skip this frame,
-          // The WindowEvent::Resized event will trigger a swapchain recreation, and the next frame will be rendered to the new swapchain
           if next_img_res.is_err() {
+            // The WindowEvent::Resized event should then trigger with a swapchain recreation, the next frame will be rendered to the new swapchain
             return;
           }
 
