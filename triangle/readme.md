@@ -108,3 +108,11 @@ Create command buffers and record the commands to draw a triangle. Also add help
 This tag equates to the tutorial steps at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/01_Command_buffers.html
+
+## Step: 12 - Rendering & Presentation
+
+Finally, implement the rendering loop to submit command buffers and present the rendered image to the window. Finally, we have a triangle on the screen!
+
+This tag equates to the tutorial steps at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html

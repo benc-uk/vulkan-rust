@@ -42,3 +42,4 @@ Links to the tutorial steps as incremental tags:
 ### Drawing
 
 - [1.3.0-command-buffers](https://github.com/benc-uk/vulkan-rust/tree/1.3.0-command-buffers/triangle) - Recording command buffers.
+- [1.3.1-rendering](https://github.com/benc-uk/vulkan-rust/tree/1.3.1-rendering/triangle) - Submitting command buffers and presenting the rendered image. Finally, we have a triangle on the screen!
