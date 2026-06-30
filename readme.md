@@ -43,3 +43,4 @@ Links to the tutorial steps as incremental tags:
 
 - [1.3.0-command-buffers](https://github.com/benc-uk/vulkan-rust/tree/1.3.0-command-buffers/triangle) - Recording command buffers.
 - [1.3.1-rendering](https://github.com/benc-uk/vulkan-rust/tree/1.3.1-rendering/triangle) - Submitting command buffers and presenting the rendered image. Finally, we have a triangle on the screen!
+- [1.3.2-in-flight](https://github.com/benc-uk/vulkan-rust/tree/1.3.2-in-flight/triangle) - Managing multiple frames in flight to improve performance and handle window resizing with a swapchain recreation.

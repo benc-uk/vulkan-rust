@@ -76,6 +76,8 @@ This tag equates to the tutorial step at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/02_Image_views.html
 
+# Pipeline
+
 ## Step: 08 - Shader Modules
 
 Adds code to create shader modules from SPIR-V bytecode, and an introduction to Slang and building/compiling shaders. This is the first step in setting up the graphics pipeline.
@@ -101,6 +103,8 @@ This tag equates to the tutorial steps at
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/03_Render_passes.html  
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/02_Graphics_pipeline_basics/04_Conclusion.html
 
+# Drawing
+
 ## Step: 11 - Command Buffers
 
 Create command buffers and record the commands to draw a triangle. Also add helper to transition the swapchain image layouts, and to submit the command buffers to the graphics queue.
@@ -116,3 +120,12 @@ Finally, implement the rendering loop to submit command buffers and present the 
 This tag equates to the tutorial steps at
 
 https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/02_Rendering_and_presentation.html
+
+## Step: 13 - In Flight Frames + Swapchain Recreation
+
+We combine the final two steps of the official 'drawing a triangle' tutorial into one, to manage multiple frames in flight to improve performance and handle window resizing with a swapchain recreation.
+
+This tag equates to the tutorial steps at
+
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/03_Drawing/03_Frames_in_flight.html  
+https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/04_Swap_chain_recreation.html
